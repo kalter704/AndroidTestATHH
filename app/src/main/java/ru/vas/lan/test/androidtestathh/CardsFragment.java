@@ -26,6 +26,7 @@ import java.util.Random;
 import butterknife.BindView;
 import butterknife.ButterKnife;
 import butterknife.OnClick;
+import io.reactivex.Observable;
 import io.reactivex.android.schedulers.AndroidSchedulers;
 import io.reactivex.disposables.CompositeDisposable;
 import io.reactivex.schedulers.Schedulers;
@@ -267,21 +268,25 @@ public class CardsFragment extends Fragment {
 
     @OnClick(R.id.btn_request_users)
     public void requestUsers() {
-        mUserList.clear();
-        mButtonRequestUsers.setEnabled(false);
-        mRVUserList.setVisibility(View.GONE);
-        mPBUsers.setVisibility(View.VISIBLE);
-        for (int id = 1; id <= 5; ++id) {
-            ApiFactory.getService()
-                    .getUser(id)
-                    .subscribeOn(Schedulers.io())
-                    .observeOn(AndroidSchedulers.mainThread())
-                    .subscribe(
-                            this::addUser,
-                            this::errorRequestUser,
-                            () -> Log.i(TAG, "Complete")
-                    );
-        }
+        Observable.range(1, 5)
+                .flatMap(id -> ApiFactory.getService().getUser(id))
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .doOnSubscribe(d -> {
+                    mUserList.clear();
+                    mButtonRequestUsers.setEnabled(false);
+                    mRVUserList.setVisibility(View.GONE);
+                    mPBUsers.setVisibility(View.VISIBLE);
+                })
+                .doAfterTerminate(() -> {
+                    mPBUsers.setVisibility(View.GONE);
+                    mButtonRequestUsers.setEnabled(true);
+                })
+                .subscribe(
+                        this::addUser,
+                        this::errorRequestUser,
+                        () -> Log.i(TAG, "Complete")
+                );
     }
 
     private void addUser(User user) {
@@ -292,11 +297,9 @@ public class CardsFragment extends Fragment {
     }
 
     private void showUsers() {
-        Collections.sort(mUserList, (o1, o2) -> o1.getId() - o2.getId());
+        Collections.sort(mUserList, (u1, u2) -> u1.getId() - u2.getId());
         mRVUserList.setAdapter(new UserAdapter(getContext(), mUserList));
-        mPBUsers.setVisibility(View.GONE);
         mRVUserList.setVisibility(View.VISIBLE);
-        mButtonRequestUsers.setEnabled(true);
     }
 
     private void errorRequestUser(Throwable throwable) {
